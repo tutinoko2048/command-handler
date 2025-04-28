@@ -30,8 +30,6 @@ jobs:
           PACKAGE_NAME=$(node -p "require('./package.json').name")
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
 
-     
-
       - name: Get latest tag and increment
         id: get_version
         run: |
