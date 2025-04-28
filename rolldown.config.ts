@@ -9,7 +9,7 @@ export default defineConfig({
   output: {
     dir: OUTDIR,
     target: 'es2023',
-    sourcemap: 'inline',
+    // sourcemap: 'inline',
   },
   plugins: [
     dts()

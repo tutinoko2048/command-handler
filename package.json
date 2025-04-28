@@ -1,7 +1,10 @@
 {
-  "name": "command-handler",
+  "name": "@tutinoko2048/command-handler",
   "version": "0.1.0",
+  "description": "Slash command handler for ScriptAPI",
   "type": "module",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
   "scripts": {
     "build": "rolldown -c",
     "lint": "tsc"
