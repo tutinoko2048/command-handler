@@ -3,24 +3,25 @@ import {
   CommandPermissionLevel,
   CustomCommandParameter,
   CustomCommandParamType,
-  CustomCommandRegistry,
   CustomCommandResult,
   CustomCommandStatus,
   Entity,
   ItemType,
   Player,
+  StartupEvent,
+  system,
   Vector3
 } from '@minecraft/server';
 import { CommandOrigin } from './origin';
 import { CommandEnum } from './enum';
 
-interface Command {
+export interface Command {
   name: `${string}:${string}`;
   description: string;
   permissionLevel: CommandPermissionLevel;
 }
 
-interface ParamTypeMap {
+export interface ParamTypeMap {
   [CustomCommandParamType.Boolean]: boolean;
   [CustomCommandParamType.Integer]: number;
   [CustomCommandParamType.Float]: number;
@@ -42,7 +43,7 @@ type GetParamValue<T extends ParamType> = T extends CommandEnum<infer V>
     ? ParamTypeMap[T]
     : never;
 
-type CommandCallback<PARAMS extends CommandParams> = (
+export type CommandCallback<PARAMS extends CommandParams> = (
   params: {
     [K in keyof PARAMS]: PARAMS[K] extends [infer T]
       ? T extends ParamType
@@ -53,9 +54,9 @@ type CommandCallback<PARAMS extends CommandParams> = (
         : never;
   },
   origin: CommandOrigin,
-) => CustomCommandResult;
+) => CustomCommandResult | CustomCommandStatus;
 
-interface CommandRegistrationData {
+export interface CommandRegistrationData {
   command: Command;
   callback: CommandCallback<CommandParams>;
   params: CommandParams;
@@ -64,8 +65,14 @@ interface CommandRegistrationData {
 export class CommandHandler {
   private readonly commands = new Set<CommandRegistrationData>();
   private readonly enums = new Map<string, CommandEnum>();
+
+  constructor() {
+    system.beforeEvents.startup.subscribe(this.onStartup.bind(this));
+  }
   
-  onStartup(registry: CustomCommandRegistry) {
+  private onStartup(event: StartupEvent) {
+    const registry = event.customCommandRegistry;
+
     // Register all enums first
     for (const { name, values } of this.enums.values()) {
       registry.registerEnum(name, enumKeys(values));
@@ -120,10 +127,16 @@ export class CommandHandler {
           }
         }
         
-        return callback(
+        const result = callback(
           parsedParams as any, 
           new CommandOrigin(origin)
         );
+
+        if (typeof result === 'number') {
+          return { status: result }
+        } else {
+          return result;
+        }
       });
     }
   }
@@ -132,34 +145,19 @@ export class CommandHandler {
     command: Command,
     callback: CommandCallback<PARAMS>,
     params: PARAMS,
-  ): CustomCommandResult | CustomCommandStatus {
-    throw new Error('not implemented'); //TODO - implement this method
+  ): CommandRegistrationData {
+    const data: CommandRegistrationData = { command, callback: callback as any, params };
+    this.commands.add(data);
+    return data;
   }
+}
+
+export namespace CommandHandler {
+  export const createEnum = CommandEnum.createEnum;
 }
 
 function enumKeys<T extends Record<string, string | number>>(e: T): (keyof T)[] {
   return Object.keys(e).filter((k) => isNaN(Number(k))) as (keyof T)[];
-}
-
-type ExtractArray<T> = T extends (infer U)[] ? U : never;
-
-export function createEnum<const T extends string[]>(
-  name: `${string}:${string}`,
-  values: T,
-): CommandEnum<ExtractArray<T>>;
-export function createEnum<T extends Record<string, string | number>>(
-  name: `${string}:${string}`,
-  values: T,
-): CommandEnum<T[keyof T]>;
-export function createEnum(
-  name: `${string}:${string}`,
-  values: string | Record<string, string | number>,
-): CommandEnum {
-  if (Array.isArray(values)) {
-    return new CommandEnum(name, Object.fromEntries(values.map((v) => [v, v])));
-  } else {
-    return new CommandEnum(name, values as Record<string, string | number>);
-  }
 }
 
 export const commandHandler = new CommandHandler();

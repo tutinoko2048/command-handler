@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "rolldown -c"
+    "build": "rolldown -c",
+    "lint": "tsc"
   },
   "devDependencies": {
     "rolldown": "^1.0.0-beta.8",
