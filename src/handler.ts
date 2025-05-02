@@ -62,6 +62,8 @@ export interface CommandRegistrationData {
   params: CommandParams;
 }
 
+type ExtractArray<T> = T extends (infer U)[] ? U : never;
+
 export class CommandHandler {
   private readonly commands = new Set<CommandRegistrationData>();
   private readonly enums = new Map<string, CommandEnum>();
@@ -92,8 +94,6 @@ export class CommandHandler {
         const paramList = isOptional ? optionalParams : mandatoryParams;
 
         if (param instanceof CommandEnum) {
-          if (this.enums.has(param.name)) throw new Error(`Enum ${param.name} is already registered`);
-          this.enums.set(param.name, param);
           paramList.push({ name: param.name, type: CustomCommandParamType.Enum });
         } else {
           paramList.push({ name: key, type: param });
@@ -150,10 +150,29 @@ export class CommandHandler {
     this.commands.add(data);
     return data;
   }
-}
 
-export namespace CommandHandler {
-  export const createEnum = CommandEnum.createEnum;
+  createEnum<const T extends string[]>(
+    name: `${string}:${string}`,
+    values: T,
+  ): CommandEnum<ExtractArray<T>>;
+  createEnum<T extends Record<string, string | number>>(
+    name: `${string}:${string}`,
+    values: T,
+  ): CommandEnum<T[keyof T]>;
+  createEnum(
+    name: `${string}:${string}`,
+    values: string[] | Record<string, string | number>,
+  ): CommandEnum {
+    if (this.enums.has(name)) throw new Error(`Enum ${name} is already registered`);
+    
+    const enumValues = Array.isArray(values)
+      ? Object.fromEntries(values.map((v) => [v, v]))
+      : values;
+    const commandEnum = new CommandEnum(name, enumValues);
+    this.enums.set(name, commandEnum);
+    
+    return commandEnum;
+  }
 }
 
 function enumKeys<T extends Record<string, string | number>>(e: T): (keyof T)[] {
@@ -161,3 +180,5 @@ function enumKeys<T extends Record<string, string | number>>(e: T): (keyof T)[] 
 }
 
 export const commandHandler = new CommandHandler();
+
+export const createEnum = commandHandler.createEnum.bind(commandHandler);
