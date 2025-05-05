@@ -3,9 +3,9 @@ import { CustomCommandSource } from '@minecraft/server';
 import { Block, Player, Vector3 } from '@minecraft/server';
 import { CustomCommandOrigin, Entity } from '@minecraft/server';
 
-export class CommandOrigin {
+export abstract class CommandOrigin {
   constructor(
-    private readonly origin: CustomCommandOrigin
+    protected readonly origin: CustomCommandOrigin
   ) {}
 
   getEntity(throwIfInvalid: true): Entity;
@@ -53,27 +53,63 @@ export class CommandOrigin {
     return entity;
   }
 
-  isServer(): boolean {
+  isServer(): this is ServerCommandOrigin {
     return this.origin.sourceType === CustomCommandSource.Server;
   }
 
-  getLocation(throwIfInvalid: true): Vector3;
-  getLocation(throwIfInvalid?: false): Vector3 | undefined;
-  getLocation(throwIfInvalid = false): Vector3 | undefined {
-    if (throwIfInvalid && this.isServer()) {
-      throw new Error('Failed to get location from command origin');
-    }
-    const source = this.origin.initiator ?? this.origin.sourceEntity ?? this.origin.sourceBlock;
-    return source?.location;
+  isPlayer(): this is PlayerCommandOrigin {
+    return !!this.getPlayer();
   }
 
-  getDimension(throwIfInvalid: true): Dimension;
-  getDimension(throwIfInvalid?: false): Dimension | undefined;
-  getDimension(throwIfInvalid = false): Dimension | undefined {
-    if (throwIfInvalid && this.isServer()) {
-      throw new Error('Failed to get dimension from command origin');
-    }
-    const source = this.origin.initiator ?? this.origin.sourceEntity ?? this.origin.sourceBlock;
-    return source?.dimension;
+  isSendable(): this is SendableOrigin {
+    return this.isServer() || this.isPlayer();
+  }
+
+  isLocatable(): this is LocatableOrigin {
+    return !!this.getEntity() || !!this.getBlock();
+  }
+}
+
+interface SendableOrigin {
+  sendMessage(message: string): void;
+}
+
+interface LocatableOrigin {
+  getLocation(throwIfInvalid: boolean): Vector3 | undefined;
+  getDimension(throwIfInvalid: boolean): Dimension | undefined;
+}
+
+export class ServerCommandOrigin extends CommandOrigin implements SendableOrigin {
+  sendMessage(message: string): void {
+    console.log(message);
+  }
+}
+
+export class BlockCommandOrigin extends CommandOrigin implements LocatableOrigin {
+  getLocation(): Vector3 {
+    return this.getBlock(true).location;
+  }
+
+  getDimension(): Dimension {
+    return this.getBlock(true).dimension;
+  }
+}
+
+export class EntityCommandOrigin extends CommandOrigin implements LocatableOrigin {
+  getLocation(): Vector3 {
+    return this.getEntity(true).location;
+  }
+
+  getDimension(): Dimension {
+    return this.getEntity(true).dimension;
+  }
+}
+
+export class NPCCommandOrigin extends EntityCommandOrigin {}
+
+export class PlayerCommandOrigin extends EntityCommandOrigin implements SendableOrigin {
+  sendMessage(message: string): void {
+    const player = this.getPlayer(true);
+    player.sendMessage(message);
   }
 }

@@ -1,9 +1,11 @@
 import {
   BlockType,
   CommandPermissionLevel,
+  CustomCommandOrigin,
   CustomCommandParameter,
   CustomCommandParamType,
   CustomCommandResult,
+  CustomCommandSource,
   CustomCommandStatus,
   Entity,
   ItemType,
@@ -12,13 +14,16 @@ import {
   system,
   Vector3
 } from '@minecraft/server';
-import { CommandOrigin } from './origin';
+import { BlockCommandOrigin, CommandOrigin, EntityCommandOrigin, NPCCommandOrigin, PlayerCommandOrigin, ServerCommandOrigin } from './origin';
 import { CommandEnum } from './enum';
 
+type NamespacedString = `${string}:${string}`;
+
 export interface Command {
-  name: `${string}:${string}`;
+  name: NamespacedString;
   description: string;
   permissionLevel: CommandPermissionLevel;
+  aliases?: string[];
 }
 
 export interface ParamTypeMap {
@@ -65,8 +70,8 @@ export interface CommandRegistrationData {
 type ExtractArray<T> = T extends (infer U)[] ? U : never;
 
 export class CommandHandler {
-  private readonly commands = new Set<CommandRegistrationData>();
-  private readonly enums = new Map<string, CommandEnum>();
+  public readonly commands = new Set<CommandRegistrationData>();
+  public readonly enums = new Map<string, CommandEnum>();
 
   constructor() {
     system.beforeEvents.startup.subscribe(this.onStartup.bind(this));
@@ -106,13 +111,8 @@ export class CommandHandler {
         }
       }
       
-      registry.registerCommand({
-        name: command.name,
-        description: command.description,
-        permissionLevel: command.permissionLevel,
-        mandatoryParameters: mandatoryParams,
-        optionalParameters: optionalParams,
-      }, (origin, ...params) => {
+      // コマンドコールバック関数
+      const commandCallback = (_origin: CustomCommandOrigin, ...params: any[]) => {
         const parsedParams: Record<string, any> = {};
         
         for (const [i, paramInput] of params.entries()) {
@@ -126,18 +126,54 @@ export class CommandHandler {
             parsedParams[key] = paramInput;
           }
         }
+
+        let origin: CommandOrigin;
+        switch (_origin.sourceType) {
+          case CustomCommandSource.Server: origin = new ServerCommandOrigin(_origin); break;
+          case CustomCommandSource.Entity:
+            if (_origin.sourceEntity instanceof Player) {
+              origin = new PlayerCommandOrigin(_origin);
+            } else {
+              origin = new EntityCommandOrigin(_origin);
+            }
+            break;
+          case CustomCommandSource.Block:
+            origin = new BlockCommandOrigin(_origin);
+            break;
+          case CustomCommandSource.NPCDialogue:
+            origin = new NPCCommandOrigin(_origin);
+            break;
+          default:
+            throw new Error(`Unknown command origin type: ${_origin.sourceType}`);
+        }
         
-        const result = callback(
-          parsedParams as any, 
-          new CommandOrigin(origin)
-        );
+        const result = callback(parsedParams as any, origin);
 
         if (typeof result === 'number') {
           return { status: result }
         } else {
           return result;
         }
-      });
+      };
+      
+      // main command
+      registry.registerCommand({
+        name: command.name,
+        description: command.description,
+        permissionLevel: command.permissionLevel,
+        mandatoryParameters: mandatoryParams,
+        optionalParameters: optionalParams,
+      }, commandCallback);
+      
+      for (const alias of command.aliases ?? []) {
+        registry.registerCommand({
+          name: alias.includes(':') ? alias : `${command.name.split(':')[0]}:${alias}`,
+          description: command.description,
+          permissionLevel: command.permissionLevel,
+          mandatoryParameters: mandatoryParams,
+          optionalParameters: optionalParams,
+        }, commandCallback);
+      }
     }
   }
   
@@ -152,15 +188,15 @@ export class CommandHandler {
   }
 
   createEnum<const T extends string[]>(
-    name: `${string}:${string}`,
+    name: NamespacedString,
     values: T,
   ): CommandEnum<ExtractArray<T>>;
   createEnum<T extends Record<string, string | number>>(
-    name: `${string}:${string}`,
+    name: NamespacedString,
     values: T,
   ): CommandEnum<T[keyof T]>;
   createEnum(
-    name: `${string}:${string}`,
+    name: NamespacedString,
     values: string[] | Record<string, string | number>,
   ): CommandEnum {
     if (this.enums.has(name)) throw new Error(`Enum ${name} is already registered`);
