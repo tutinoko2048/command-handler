@@ -156,13 +156,13 @@ export class CommandHandler {
         const onResult = (r: CustomCommandResult) => {
           // send output message if `sendCommandFeedback` is set to false to always show the message to the player
           if (
+            r.status === CustomCommandStatus.Success &&
             r.message &&
             this.options.alwaysShowMessage &&
             !world.gameRules.sendCommandFeedback &&
             origin instanceof PlayerCommandOrigin
           ) {
-            const color = r.status === CustomCommandStatus.Success ? '§r§f' : '§r§c';
-            origin.sendMessage(color + r.message);
+            origin.sendMessage('§r§f' + r.message);
           }
           
           return r;
@@ -170,7 +170,7 @@ export class CommandHandler {
 
         return onResult(
           typeof result === 'number' ? { status: result } : result,
-        )
+        );
       };
       
       // main command
