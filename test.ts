@@ -1,5 +1,4 @@
 import {
-  BlockType,
   CustomCommandParamType,
   CommandPermissionLevel,
   CustomCommandStatus,

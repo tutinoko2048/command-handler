@@ -1,4 +1,5 @@
 import {
+  world,
   BlockType,
   CommandPermissionLevel,
   CustomCommandOrigin,
@@ -12,7 +13,7 @@ import {
   Player,
   StartupEvent,
   system,
-  Vector3
+  Vector3,
 } from '@minecraft/server';
 import { BlockCommandOrigin, CommandOrigin, EntityCommandOrigin, NPCCommandOrigin, PlayerCommandOrigin, ServerCommandOrigin } from './origin';
 import { CommandEnum } from './enum';
@@ -67,11 +68,14 @@ export interface CommandRegistrationData {
   params: CommandParams;
 }
 
-type ExtractArray<T> = T extends (infer U)[] ? U : never;
-
 export class CommandHandler {
   public readonly commands = new Set<CommandRegistrationData>();
   public readonly enums = new Map<string, CommandEnum>();
+
+  public readonly options = {
+    /** Show output message even if `sendcommandfeedback` is set false */
+    alwaysShowMessage: true,
+  }
 
   constructor() {
     system.beforeEvents.startup.subscribe(this.onStartup.bind(this));
@@ -149,11 +153,24 @@ export class CommandHandler {
         
         const result = callback(parsedParams as any, origin);
 
-        if (typeof result === 'number') {
-          return { status: result }
-        } else {
-          return result;
+        const onResult = (r: CustomCommandResult) => {
+          // send output message if `sendCommandFeedback` is set to false to always show the message to the player
+          if (
+            r.message &&
+            this.options.alwaysShowMessage &&
+            !world.gameRules.sendCommandFeedback &&
+            origin.isPlayer()
+          ) {
+            const color = r.status === CustomCommandStatus.Success ? '§r§f' : '§r§c';
+            origin.sendMessage(color + r.message);
+          }
+          
+          return r;
         }
+
+        return onResult(
+          typeof result === 'number' ? { status: result } : result,
+        )
       };
       
       // main command
@@ -190,7 +207,7 @@ export class CommandHandler {
   createEnum<const T extends string[]>(
     name: NamespacedString,
     values: T,
-  ): CommandEnum<ExtractArray<T>>;
+  ): CommandEnum<T[number]>;
   createEnum<T extends Record<string, string | number>>(
     name: NamespacedString,
     values: T,
