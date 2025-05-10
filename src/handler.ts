@@ -159,7 +159,7 @@ export class CommandHandler {
             r.message &&
             this.options.alwaysShowMessage &&
             !world.gameRules.sendCommandFeedback &&
-            origin.isPlayer()
+            origin instanceof PlayerCommandOrigin
           ) {
             const color = r.status === CustomCommandStatus.Success ? '§r§f' : '§r§c';
             origin.sendMessage(color + r.message);
