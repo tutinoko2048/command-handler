@@ -17,13 +17,14 @@ import {
 } from '@minecraft/server';
 import { BlockCommandOrigin, CommandOrigin, EntityCommandOrigin, NPCCommandOrigin, PlayerCommandOrigin, ServerCommandOrigin } from './origin';
 import { CommandEnum } from './enum';
+import { failure } from './utils';
 
 type NamespacedString = `${string}:${string}`;
 
 export interface Command {
   name: NamespacedString;
   description: string;
-  permissionLevel: CommandPermissionLevel;
+  permission: CommandPermissionLevel | ((origin: CommandOrigin) => boolean | { error: string });
   aliases?: string[];
 }
 
@@ -75,6 +76,8 @@ export class CommandHandler {
   public readonly options = {
     /** Show output message even if `sendcommandfeedback` is set false */
     alwaysShowMessage: true,
+
+    customPermissionError: 'You do not have permission to execute this command.',
   }
 
   constructor() {
@@ -117,20 +120,6 @@ export class CommandHandler {
       
       // コマンドコールバック関数
       const commandCallback = (_origin: CustomCommandOrigin, ...params: any[]) => {
-        const parsedParams: Record<string, any> = {};
-        
-        for (const [i, paramInput] of params.entries()) {
-          const paramEntry = paramEntries[i];
-          if (!paramEntry) throw new Error(`Invalid parameter provided at [${i}]: ${paramInput}`);
-
-          const [key, paramType] = paramEntry;
-          if (paramType instanceof CommandEnum) {
-            parsedParams[key] = paramType.getValue(paramInput);
-          } else {
-            parsedParams[key] = paramInput;
-          }
-        }
-
         let origin: CommandOrigin;
         switch (_origin.sourceType) {
           case CustomCommandSource.Server: origin = new ServerCommandOrigin(_origin); break;
@@ -149,6 +138,26 @@ export class CommandHandler {
             break;
           default:
             throw new Error(`Unknown command origin type: ${_origin.sourceType}`);
+        }
+
+        if (typeof command.permission === 'function') {
+          const customPermissionResult = command.permission(origin);
+          if (customPermissionResult !== true) {
+            return failure(typeof customPermissionResult === 'boolean' ? this.options.customPermissionError : customPermissionResult.error);
+          }
+        }
+
+        const parsedParams: Record<string, any> = {};        
+        for (const [i, paramInput] of params.entries()) {
+          const paramEntry = paramEntries[i];
+          if (!paramEntry) throw new Error(`Invalid parameter provided at [${i}]: ${paramInput}`);
+
+          const [key, paramType] = paramEntry;
+          if (paramType instanceof CommandEnum) {
+            parsedParams[key] = paramType.getValue(paramInput);
+          } else {
+            parsedParams[key] = paramInput;
+          }
         }
         
         const result = callback(parsedParams as any, origin);
@@ -177,7 +186,7 @@ export class CommandHandler {
       registry.registerCommand({
         name: command.name,
         description: command.description,
-        permissionLevel: command.permissionLevel,
+        permissionLevel: typeof command.permission === 'function' ? CommandPermissionLevel.Any : command.permission,
         mandatoryParameters: mandatoryParams,
         optionalParameters: optionalParams,
       }, commandCallback);
@@ -186,7 +195,7 @@ export class CommandHandler {
         registry.registerCommand({
           name: alias.includes(':') ? alias : `${command.name.split(':')[0]}:${alias}`,
           description: command.description,
-          permissionLevel: command.permissionLevel,
+          permissionLevel: typeof command.permission === 'function' ? CommandPermissionLevel.Any : command.permission,
           mandatoryParameters: mandatoryParams,
           optionalParameters: optionalParams,
         }, commandCallback);
