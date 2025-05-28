@@ -8,6 +8,8 @@ export abstract class CommandOrigin {
     protected readonly origin: CustomCommandOrigin
   ) {}
 
+  abstract getName(): string;
+
   getEntity(throwIfInvalid: true): Entity;
   getEntity(throwIfInvalid?: false): Entity | undefined;
   getEntity(throwIfInvalid = false): Entity | undefined {
@@ -80,12 +82,20 @@ interface LocatableOrigin {
 }
 
 export class ServerCommandOrigin extends CommandOrigin implements SendableOrigin {
+  getName(): string {
+    return 'Server';
+  }
+  
   sendMessage(message: string): void {
     console.log(message);
   }
 }
 
 export class BlockCommandOrigin extends CommandOrigin implements LocatableOrigin {
+  getName(): string {
+    return 'Block'
+  }
+  
   getLocation(): Vector3 {
     return this.getBlock(true).location;
   }
@@ -96,6 +106,10 @@ export class BlockCommandOrigin extends CommandOrigin implements LocatableOrigin
 }
 
 export class EntityCommandOrigin extends CommandOrigin implements LocatableOrigin {
+  getName(): string {
+    return this.getEntity(true).nameTag || 'Entity';
+  }
+
   getLocation(): Vector3 {
     return this.getEntity(true).location;
   }
@@ -105,9 +119,17 @@ export class EntityCommandOrigin extends CommandOrigin implements LocatableOrigi
   }
 }
 
-export class NPCCommandOrigin extends EntityCommandOrigin {}
+export class NPCCommandOrigin extends EntityCommandOrigin {
+  getName(): string {
+    return this.getEntity(true).nameTag || 'NPC';
+  }
+}
 
 export class PlayerCommandOrigin extends EntityCommandOrigin implements SendableOrigin {
+  getName(): string {
+    return this.getPlayer(true).name;
+  }
+  
   sendMessage(message: string): void {
     const player = this.getPlayer(true);
     player.sendMessage(message);
