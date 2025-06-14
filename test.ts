@@ -28,8 +28,27 @@ commandHandler.register({
   }
 }, {
   n: CustomCommandParamType.Integer,
-  aaa: createEnum('test:enum1', ['a', 'b']),
-  bbb: createEnum('test:enum2', NumberEnum),
+  aaa: createEnum('tn:enum1', ['a', 'b']),
+  bbb: createEnum('tn:enum2', NumberEnum),
   text: [CustomCommandParamType.String],
   location: [CustomCommandParamType.Location],
+});
+
+commandHandler.register({
+  name: 'tn:b',
+  description: 'desc',
+  permission: { // only allow admin players using keyboard and mouse 
+    permissionLevel: CommandPermissionLevel.Admin,
+    onVerify: (origin) => origin.getPlayer()?.inputInfo.lastInputModeUsed === 'KeyboardAndMouse'
+  }
+}, (params, origin) => {
+  for (const entity of params.target) {
+    entity.setOnFire(10);
+  }
+
+  console.warn('Hello', origin.getName());
+  
+  return CustomCommandStatus.Success;
+}, {
+  target: CustomCommandParamType.EntitySelector,
 });

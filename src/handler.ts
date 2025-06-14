@@ -21,10 +21,21 @@ import { failure } from './utils';
 
 type NamespacedString = `${string}:${string}`;
 
-export interface Command {
+export type CustomPermission = CustomPermissionCallback | {
+  permissionLevel?: CommandPermissionLevel;
+  onVerify: CustomPermissionCallback;
+}
+export type CustomPermissionCallback = (origin: CommandOrigin) => boolean | { error: string };
+
+export type Command = {
   name: NamespacedString;
   description: string;
-  permission: CommandPermissionLevel | ((origin: CommandOrigin) => boolean | { error: string });
+  permissionLevel: CommandPermissionLevel;
+  aliases?: string[];
+} | {
+  name: NamespacedString;
+  description: string;
+  permission: CustomPermission;
   aliases?: string[];
 }
 
@@ -140,10 +151,14 @@ export class CommandHandler {
             throw new Error(`Unknown command origin type: ${_origin.sourceType}`);
         }
 
-        if (typeof command.permission === 'function') {
-          const customPermissionResult = command.permission(origin);
-          if (customPermissionResult !== true) {
-            return failure(typeof customPermissionResult === 'boolean' ? this.options.customPermissionError : customPermissionResult.error);
+        // permission check
+        if ('permission' in command) {
+          const onVerify = typeof command.permission === 'function'
+            ? command.permission
+            : command.permission.onVerify;
+          const verifiedResult = onVerify(origin);
+          if (verifiedResult !== true) {
+            return failure(typeof verifiedResult === 'boolean' ? this.options.customPermissionError : verifiedResult.error);
           }
         }
 
@@ -181,12 +196,23 @@ export class CommandHandler {
           typeof result === 'number' ? { status: result } : result,
         );
       };
+
+      let permissionLevel: CommandPermissionLevel;
+      if ('permission' in command) { // CustomPermission
+        if (typeof command.permission === 'function') {
+          permissionLevel = CommandPermissionLevel.Any; // Custom callback permissions always use Any level
+        } else {
+          permissionLevel = command.permission.permissionLevel ?? CommandPermissionLevel.Any;
+        }
+      } else { // CommandPermissionLevel (vanilla)
+        permissionLevel = command.permissionLevel;
+      }
       
       // main command
       registry.registerCommand({
         name: command.name,
         description: command.description,
-        permissionLevel: typeof command.permission === 'function' ? CommandPermissionLevel.Any : command.permission,
+        permissionLevel,
         mandatoryParameters: mandatoryParams,
         optionalParameters: optionalParams,
       }, commandCallback);
@@ -195,7 +221,7 @@ export class CommandHandler {
         registry.registerCommand({
           name: alias.includes(':') ? alias : `${command.name.split(':')[0]}:${alias}`,
           description: command.description,
-          permissionLevel: typeof command.permission === 'function' ? CommandPermissionLevel.Any : command.permission,
+          permissionLevel,
           mandatoryParameters: mandatoryParams,
           optionalParameters: optionalParams,
         }, commandCallback);
