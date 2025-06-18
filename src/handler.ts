@@ -91,6 +91,8 @@ export class CommandHandler {
     customPermissionError: 'You do not have permission to execute this command.',
   }
 
+  private isRegistered = false;
+
   constructor() {
     system.beforeEvents.startup.subscribe(this.onStartup.bind(this));
   }
@@ -207,6 +209,8 @@ export class CommandHandler {
       } else { // CommandPermissionLevel (vanilla)
         permissionLevel = command.permissionLevel;
       }
+
+      (command as any).permissionLevel = permissionLevel; // add final permission level to command object
       
       // main command
       registry.registerCommand({
@@ -227,6 +231,8 @@ export class CommandHandler {
         }, commandCallback);
       }
     }
+
+    this.isRegistered = true;
   }
   
   register<PARAMS extends CommandParams>(
@@ -260,6 +266,23 @@ export class CommandHandler {
     this.enums.set(name, commandEnum);
     
     return commandEnum;
+  }
+
+
+  getAvailableCommands(
+    permissionLevel: CommandPermissionLevel = CommandPermissionLevel.Any
+  ): (Command & { permissionLevel: CommandPermissionLevel })[] {
+    if (!this.isRegistered) {
+      throw new Error('This method can only be called after startup event');
+    }
+
+    const commands: (Command & { permissionLevel: CommandPermissionLevel })[] = [];
+    for (const { command } of this.commands) {
+      if ('permissionLevel' in command && command.permissionLevel <= permissionLevel) {
+        commands.push(command);
+      }
+    }
+    return commands;
   }
 }
 
